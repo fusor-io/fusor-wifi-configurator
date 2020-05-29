@@ -6,51 +6,77 @@
 */
 
 #include <Arduino.h>
+#include <EEPROM.h>
 #include "WifiConfigurator.h"
 #include "WifiConfigurator-html.h"
 
-WifiConfigurator::WifiConfigurator(const char *ssid, const char *password) : server(80),
-                                                                             local_ip(192, 168, 1, 1),
-                                                                             gateway(192, 168, 1, 1),
-                                                                             subnet(255, 255, 255, 0)
+WifiConfigurator::WifiConfigurator(const char *ssid, const char *password) : _server(80),
+                                                                             _local_ip(192, 168, 1, 1),
+                                                                             _gateway(192, 168, 1, 1),
+                                                                             _subnet(255, 255, 255, 0)
 {
   _ssid = ssid;
   _password = password;
   memset(_variables, 0, sizeof(_variables));
+
+  _loadFromEEPROM();
 }
 
 void WifiConfigurator::addParam(const char *name, char *value)
 {
-  for (int i = 0; i < MAX_PARAM_NUM; i++)
+  int id = _getParamId(name);
+  if (id < 0)
   {
-    if (!_variables[i].key)
-    {
-      _variables[i].key = name;
-      _variables[i].value = value;
-      return;
-    }
-    if (strcmp(_variables[i].key, name) == 0)
-    {
-      _variables[i].value = value;
-      return;
-    }
+    // create new param
+    _variables[_varCount].key = name;
+    _variables[_varCount].value = value;
+    _varCount++;
   }
+  // Param already exist, do nothing
+  // Motivation:
+  //   when configurator is created, we read params from EEPROM
+  //   then caller program calls addParam and we dont want to overrwrite EEPROM value
+  // Use setParam to update/create.
+}
+
+void WifiConfigurator::setParam(const char *name, char *value)
+{
+  if (name[0] == 0 || value[0] == 0)
+    return;
+
+  int id = _getParamId(name);
+  if (id < 0)
+  {
+    // create new param
+    _variables[_varCount].key = name;
+    _variables[_varCount].value = value;
+    _varCount++;
+  }
+  else
+  {
+    // overwrite existing
+    _variables[id].value = value;
+  }
+}
+
+int WifiConfigurator::_getParamId(const char *name)
+{
+  ParamStruct *variable = _variables;
+
+  for (int i = 0; i < _varCount; i++, variable++)
+    if (strcmp(variable->key, name) == 0)
+      return i;
+
+  return -1;
 }
 
 const char *WifiConfigurator::getParam(const char *name)
 {
-  for (int i = 0; i < MAX_PARAM_NUM; i++)
-  {
-    if (!_variables[i].key)
-      return nullptr;
-    if (strcmp(_variables[i].key, name) == 0)
-    {
-      return _variables[i].value;
-    }
-  }
+  int id = _getParamId(name);
+  return id < 0 ? nullptr : _variables[id].value;
 }
 
-void WifiConfigurator::setup()
+void WifiConfigurator::runServer()
 {
   WiFi.persistent(false);
 
@@ -59,41 +85,42 @@ void WifiConfigurator::setup()
   else
     WiFi.softAP(_ssid, _password);
 
-  WiFi.softAPConfig(local_ip, gateway, subnet);
+  WiFi.softAPConfig(_local_ip, _gateway, _subnet);
 
-  server.begin();
+  _server.begin();
 
-  while (!run())
+  while (!_serve())
   {
   }
+
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
 }
 
-bool WifiConfigurator::run()
+bool WifiConfigurator::_serve()
 {
-  WiFiClient client = server.available();
+  WiFiClient client = _server.available();
 
   if (client)
   {
-    memset(_request, 0, MAX_REQUEST_LEN);
+    memset(_buffer, 0, CONFIGURATOR_BUFFER_SIZE);
 
     uint8_t len = 0;
     bool skipTheRest = false;
     char prev = '\0';
 
-    Serial.println("new client");
     while (client.connected())
     {
       if (client.available())
       {
         char c = client.read();
-        Serial.write(c);
 
-        if (len < MAX_REQUEST_LEN - 1 && !skipTheRest)
+        if (len < CONFIGURATOR_BUFFER_SIZE - 1 && !skipTheRest)
         {
           if (c == '\n')
             skipTheRest = true;
           else
-            _request[len++] = c;
+            _buffer[len++] = c;
         }
 
         if (c == '\r' && prev == '\n')
@@ -103,7 +130,7 @@ bool WifiConfigurator::run()
       }
     }
 
-    if (strncmp("GET / ", _request, 6) == 0)
+    if (strncmp("GET / ", _buffer, 6) == 0)
     {
       client.println(http200);
       client.println(ctHTML);
@@ -111,7 +138,7 @@ bool WifiConfigurator::run()
       client.println();
       client.println(indexHtml);
     }
-    else if (strncmp("GET /vars.js ", _request, 13) == 0)
+    else if (strncmp("GET /vars.js ", _buffer, 13) == 0)
     {
       client.println(http200);
       client.println(ctJavaScript);
@@ -121,7 +148,7 @@ bool WifiConfigurator::run()
       client.print(_ssid);
       client.print("',params={");
 
-      for (int i = 0; i < MAX_PARAM_NUM; i++)
+      for (int i = 0; i < CONFIGURATOR_MAX_PARAM_COUNT; i++)
       {
         if (_variables[i].key)
         {
@@ -137,10 +164,12 @@ bool WifiConfigurator::run()
       }
       client.print("}");
     }
-    else if (strncmp("GET /?", _request, 6) == 0)
+    else if (strncmp("GET /?", _buffer, 6) == 0)
     {
-      char *query = &_request[6];
+      char *query = &_buffer[6];
+
       _urlDecode(query);
+      _saveToEEPROM();
 
       client.println(http200);
       client.println(ctHTML);
@@ -155,9 +184,6 @@ bool WifiConfigurator::run()
       client.println(http404);
       client.println("Connection: close");
       client.println();
-
-      Serial.print("404:");
-      Serial.println(_request);
     }
 
     // give the web browser time to receive the data
@@ -165,7 +191,6 @@ bool WifiConfigurator::run()
 
     // close the connection:
     client.stop();
-    Serial.println("Close connection");
   }
 
   return false;
@@ -229,7 +254,7 @@ void WifiConfigurator::_urlDecode(char *url)
       *follower = 0;
       if (paramPending)
       {
-        addParam((const char *)paramName, paramValue);
+        setParam((const char *)paramName, paramValue);
         paramName = follower + 1;
         paramPending = false;
         if (*leader == ' ')
@@ -247,4 +272,86 @@ void WifiConfigurator::_urlDecode(char *url)
   }
 
   *follower = 0;
+}
+
+void WifiConfigurator::_saveToEEPROM()
+{
+  uint16_t address = 0;
+
+  EEPROM.begin(CONFIGURATOR_EEPROM_SIZE);
+
+  // Write signature
+  _writeEEPROM(address, (uint8_t *)_signature, sizeof(_signature) - 1);
+  // Write number of variables to store
+  _writeEEPROM(address, &_varCount, sizeof(_varCount));
+
+  // Write variables
+  ParamStruct *variable = _variables;
+  for (uint8_t i = 0; i < _varCount; i++, variable++)
+  {
+    _writeEEPROM(address, (uint8_t *)(variable->key), strlen(variable->key) + 1);
+    _writeEEPROM(address, (uint8_t *)(variable->value), strlen(variable->value) + 1);
+  }
+
+  EEPROM.commit();
+}
+
+void WifiConfigurator::_writeEEPROM(uint16_t &address, uint8_t *data, uint16_t size)
+{
+  for (uint16_t i = 0; i < size; i++, data++, address++)
+  {
+    char c = *data;
+    EEPROM.write(address, *data);
+  }
+}
+
+void WifiConfigurator::_loadFromEEPROM()
+{
+  uint16_t address = 0;
+  uint8_t count;
+
+  char sig[sizeof(_signature)];
+
+  EEPROM.begin(CONFIGURATOR_EEPROM_SIZE);
+
+  _readEEPROM(address, (uint8_t *)sig, sizeof(sig) - 1);
+  if (strncmp(sig, _signature, sizeof(_signature) - 1) != 0)
+  {
+    sig[4] = 0;
+    return;
+  }
+
+  _readEEPROM(address, &count, sizeof(count));
+
+  char *buff = _buffer;
+  for (uint8_t i = 0; i < count; i++)
+  {
+    char *varName = buff;
+    buff += _readEEPROMString(address, varName);
+    char *varValue = buff;
+    buff += _readEEPROMString(address, varValue);
+    setParam(varName, varValue);
+  }
+}
+
+void WifiConfigurator::_readEEPROM(uint16_t &address, uint8_t *buffer, uint16_t size)
+{
+  for (uint16_t i = 0; i < size; i++, buffer++, address++)
+  {
+    char c = EEPROM.read(address);
+    *buffer = c;
+  }
+}
+
+uint16_t WifiConfigurator::_readEEPROMString(uint16_t &address, char *buffer)
+{
+  for (uint16_t i = 0;; i++, buffer++, address++)
+  {
+    *buffer = EEPROM.read(address);
+    if (*buffer == 0)
+    {
+      address++;
+      return i + 1;
+    }
+  }
 }
