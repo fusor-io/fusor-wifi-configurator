@@ -17,12 +17,13 @@ WifiConfigurator::WifiConfigurator(const char *ssid, const char *password) : _se
 {
   _ssid = ssid;
   _password = password;
+
   memset(_variables, 0, sizeof(_variables));
 
   _loadFromEEPROM();
 }
 
-void WifiConfigurator::addParam(const char *name, char *value)
+void WifiConfigurator::addParam(const char *name, const char *value)
 {
   int id = _getParamId(name);
   if (id < 0)
@@ -39,7 +40,7 @@ void WifiConfigurator::addParam(const char *name, char *value)
   // Use setParam to update/create.
 }
 
-void WifiConfigurator::setParam(const char *name, char *value)
+void WifiConfigurator::setParam(const char *name, const char *value)
 {
   if (name[0] == 0 || value[0] == 0)
     return;
@@ -254,7 +255,8 @@ void WifiConfigurator::_urlDecode(char *url)
       *follower = 0;
       if (paramPending)
       {
-        setParam((const char *)paramName, paramValue);
+
+        setParam(_allocateValue(paramName), _allocateValue(paramValue));
         paramName = follower + 1;
         paramPending = false;
         if (*leader == ' ')
@@ -274,6 +276,13 @@ void WifiConfigurator::_urlDecode(char *url)
   *follower = 0;
 }
 
+const char *WifiConfigurator::_allocateValue(char *value)
+{
+  char *buff = new char[strlen(value)];
+  strcpy(buff, value);
+  return buff;
+}
+
 void WifiConfigurator::_saveToEEPROM()
 {
   uint16_t address = 0;
@@ -289,20 +298,25 @@ void WifiConfigurator::_saveToEEPROM()
   ParamStruct *variable = _variables;
   for (uint8_t i = 0; i < _varCount; i++, variable++)
   {
-    _writeEEPROM(address, (uint8_t *)(variable->key), strlen(variable->key) + 1);
-    _writeEEPROM(address, (uint8_t *)(variable->value), strlen(variable->value) + 1);
+    _writeEEPROMString(address, variable->key, CONFIGURATOR_MAX_PARAM_LEN);
+    _writeEEPROMString(address, variable->value, CONFIGURATOR_MAX_VALUE_LEN);
   }
 
   EEPROM.commit();
 }
 
-void WifiConfigurator::_writeEEPROM(uint16_t &address, uint8_t *data, uint16_t size)
+void WifiConfigurator::_writeEEPROMString(uint16_t &address, const char *str, size_t maxLen)
 {
-  for (uint16_t i = 0; i < size; i++, data++, address++)
-  {
-    char c = *data;
-    EEPROM.write(address, *data);
-  }
+  size_t len = strlen(str);
+  uint8_t size = (uint8_t)(len > maxLen ? maxLen : len);
+  _writeEEPROM(address, &size, sizeof(size));
+  _writeEEPROM(address, (uint8_t *)str, size);
+}
+
+void WifiConfigurator::_writeEEPROM(uint16_t &address, uint8_t *data, uint8_t size)
+{
+  for (uint8_t i = 0; i < size; i++, data++, address++)
+    EEPROM.write(address, (char)*data);
 }
 
 void WifiConfigurator::_loadFromEEPROM()
@@ -326,32 +340,28 @@ void WifiConfigurator::_loadFromEEPROM()
   char *buff = _buffer;
   for (uint8_t i = 0; i < count; i++)
   {
-    char *varName = buff;
-    buff += _readEEPROMString(address, varName);
-    char *varValue = buff;
-    buff += _readEEPROMString(address, varValue);
+    const char *varName = _readEEPROMString(address);
+    const char *varValue = _readEEPROMString(address);
     setParam(varName, varValue);
   }
 }
 
-void WifiConfigurator::_readEEPROM(uint16_t &address, uint8_t *buffer, uint16_t size)
+void WifiConfigurator::_readEEPROM(uint16_t &address, uint8_t *buffer, uint8_t size)
 {
-  for (uint16_t i = 0; i < size; i++, buffer++, address++)
-  {
-    char c = EEPROM.read(address);
-    *buffer = c;
-  }
+  for (uint8_t i = 0; i < size; i++, buffer++, address++)
+    *buffer = (uint8_t)EEPROM.read(address);
 }
 
-uint16_t WifiConfigurator::_readEEPROMString(uint16_t &address, char *buffer)
+const char *WifiConfigurator::_readEEPROMString(uint16_t &address)
 {
-  for (uint16_t i = 0;; i++, buffer++, address++)
-  {
-    *buffer = EEPROM.read(address);
-    if (*buffer == 0)
-    {
-      address++;
-      return i + 1;
-    }
-  }
+  uint8_t size = EEPROM.read(address++);
+  char *buffer = new char[size + 1];
+
+  char *p = buffer;
+  for (uint8_t i = 0; i < size; i++, p++, address++)
+    *p = EEPROM.read(address);
+
+  buffer[size] = 0;
+
+  return buffer;
 }
