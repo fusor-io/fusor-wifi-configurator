@@ -176,14 +176,14 @@ bool WifiConfigurator::_serve()
       client.println(ctHTML);
       client.println(httpClose);
       client.println();
-      client.println("DONE");
+      client.println(successHtml);
 
       return true;
     }
     else
     {
       client.println(http404);
-      client.println("Connection: close");
+      client.println(httpClose);
       client.println();
     }
 
