@@ -12,9 +12,15 @@ WifiConfigurator  KEYWORD1
 # Methods and Functions (KEYWORD2)
 #######################################
  
-setup  KEYWORD2
-run   KEYWORD2
- 
+addParam  KEYWORD2
+setParam  KEYWORD2
+getParam  KEYWORD2
+runServer  KEYWORD2
+
 #######################################
 # Constants (LITERAL1)
 #######################################
+
+CONFIGURATOR_MAX_PARAM_COUNT LITERAL1
+CONFIGURATOR_MAX_PARAM_LEN LITERAL1
+CONFIGURATOR_MAX_VALUE_LEN LITERAL1
