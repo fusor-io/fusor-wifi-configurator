@@ -26,11 +26,11 @@ class WifiConfigurator
 {
 
 public:
-  WifiConfigurator(const char *, const char *password = nullptr);
+  WifiConfigurator();
   void addParam(const char *, const char *);
   void setParam(const char *, const char *);
   const char *getParam(const char *);
-  void runServer();
+  void runServer(const char *, const char *password = nullptr);
 
 private:
   IPAddress _local_ip;
@@ -41,7 +41,6 @@ private:
   char _buffer[CONFIGURATOR_BUFFER_SIZE];
 
   const char *_ssid;
-  const char *_password;
   ParamStruct _variables[CONFIGURATOR_MAX_PARAM_COUNT];
   uint8_t _varCount = 0;
 

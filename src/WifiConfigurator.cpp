@@ -10,13 +10,11 @@
 #include "WifiConfigurator.h"
 #include "WifiConfigurator-html.h"
 
-WifiConfigurator::WifiConfigurator(const char *ssid, const char *password) : _server(80),
-                                                                             _local_ip(192, 168, 1, 1),
-                                                                             _gateway(192, 168, 1, 1),
-                                                                             _subnet(255, 255, 255, 0)
+WifiConfigurator::WifiConfigurator() : _server(80),
+                                       _local_ip(192, 168, 1, 1),
+                                       _gateway(192, 168, 1, 1),
+                                       _subnet(255, 255, 255, 0)
 {
-  _ssid = ssid;
-  _password = password;
 
   memset(_variables, 0, sizeof(_variables));
 
@@ -77,14 +75,16 @@ const char *WifiConfigurator::getParam(const char *name)
   return id < 0 ? nullptr : _variables[id].value;
 }
 
-void WifiConfigurator::runServer()
+void WifiConfigurator::runServer(const char *ssid, const char *password)
 {
+  _ssid = ssid;
+
   WiFi.persistent(false);
 
-  if (_password == nullptr || !_password[0])
+  if (password == nullptr || !password[0])
     WiFi.softAP(_ssid);
   else
-    WiFi.softAP(_ssid, _password);
+    WiFi.softAP(_ssid, password);
 
   WiFi.softAPConfig(_local_ip, _gateway, _subnet);
 
