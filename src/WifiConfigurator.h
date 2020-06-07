@@ -27,6 +27,7 @@ class WifiConfigurator
 
 public:
   WifiConfigurator();
+  void init();
   void addParam(const char *, const char *);
   void setParam(const char *, const char *);
   const char *getParam(const char *);

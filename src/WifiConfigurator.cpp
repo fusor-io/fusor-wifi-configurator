@@ -15,9 +15,11 @@ WifiConfigurator::WifiConfigurator() : _server(80),
                                        _gateway(192, 168, 1, 1),
                                        _subnet(255, 255, 255, 0)
 {
+}
 
+void WifiConfigurator::init()
+{
   memset(_variables, 0, sizeof(_variables));
-
   _loadFromEEPROM();
 }
 
@@ -289,6 +291,8 @@ void WifiConfigurator::_saveToEEPROM()
 
   EEPROM.begin(CONFIGURATOR_EEPROM_SIZE);
 
+  Serial.println("Save to EEPROM");
+
   // Write signature
   _writeEEPROM(address, (uint8_t *)_signature, sizeof(_signature) - 1);
   // Write number of variables to store
@@ -330,10 +334,7 @@ void WifiConfigurator::_loadFromEEPROM()
 
   _readEEPROM(address, (uint8_t *)sig, sizeof(sig) - 1);
   if (strncmp(sig, _signature, sizeof(_signature) - 1) != 0)
-  {
-    sig[4] = 0;
     return;
-  }
 
   _readEEPROM(address, &count, sizeof(count));
 
