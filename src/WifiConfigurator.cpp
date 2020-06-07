@@ -291,8 +291,6 @@ void WifiConfigurator::_saveToEEPROM()
 
   EEPROM.begin(CONFIGURATOR_EEPROM_SIZE);
 
-  Serial.println("Save to EEPROM");
-
   // Write signature
   _writeEEPROM(address, (uint8_t *)_signature, sizeof(_signature) - 1);
   // Write number of variables to store
