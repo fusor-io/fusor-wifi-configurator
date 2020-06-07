@@ -50,7 +50,7 @@ private:
   bool _serve();
   void _urlDecode(char *);
 
-  const char _signature[5] = "CFG ";
+  const char _signature[5] = "CFG=";
 
   void _saveToEEPROM();
   void _writeEEPROM(uint16_t &address, uint8_t *, uint8_t);
