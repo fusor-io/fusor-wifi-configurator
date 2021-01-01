@@ -8,7 +8,11 @@
 #ifndef wificonfigurator_h
 #define wificonfigurator_h
 
+#ifdef ESP32
 #include <WiFi.h>
+#else
+#include <ESP8266WiFi.h>
+#endif
 
 #define CONFIGURATOR_BUFFER_SIZE 512
 #define CONFIGURATOR_EEPROM_SIZE 512
@@ -51,7 +55,7 @@ private:
   bool _serve();
   void _urlDecode(char *);
 
-  const char _signature[5] = "CFG=";
+  const char _signature[5] = {'C', 'F', 'G', '=', '\0'};
 
   void _saveToEEPROM();
   void _writeEEPROM(uint16_t &address, uint8_t *, uint8_t);
