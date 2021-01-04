@@ -117,6 +117,7 @@ bool WifiConfigurator::_serve()
       if (client.available())
       {
         char c = client.read();
+        Serial.print(c);
 
         if (len < CONFIGURATOR_BUFFER_SIZE - 1 && !skipTheRest)
         {
@@ -139,17 +140,15 @@ bool WifiConfigurator::_serve()
       client.println(ctHTML);
       client.println(httpClose);
       client.println();
+#ifdef ESP32
       client.println(indexHtml);
-    }
-    else if (strncmp("GET /vars.js ", _buffer, 13) == 0)
-    {
-      client.println(http200);
-      client.println(ctJavaScript);
-      client.println(httpClose);
-      client.println();
-      client.print("var title='");
+#else
+      client.println(F(INDEX_HTML));
+#endif
+
+      client.print(F("var title='"));
       client.print(_ssid);
-      client.print("',params={");
+      client.print(F("',params={"));
 
       for (int i = 0; i < CONFIGURATOR_MAX_PARAM_COUNT; i++)
       {
@@ -158,14 +157,25 @@ bool WifiConfigurator::_serve()
           client.print(_variables[i].key);
           client.print(":'");
           client.print(_variables[i].value);
-          client.print("',");
+          if (i < CONFIGURATOR_MAX_PARAM_COUNT - 1)
+          {
+            client.print("',");
+          }
         }
         else
         {
           break;
         }
       }
-      client.print("}");
+      client.println("};");
+
+#ifdef ESP32
+      client.println(indexHtmlEnd);
+#else
+      client.println(F(INDEX_HTML_END));
+#endif
+
+
     }
     else if (strncmp("GET /?", _buffer, 6) == 0)
     {
@@ -178,7 +188,11 @@ bool WifiConfigurator::_serve()
       client.println(ctHTML);
       client.println(httpClose);
       client.println();
+#ifdef ESP32
       client.println(successHtml);
+#else
+      client.println(F(SUCCESS_HTML));
+#endif
 
       return true;
     }
@@ -190,7 +204,7 @@ bool WifiConfigurator::_serve()
     }
 
     // give the web browser time to receive the data
-    delay(5);
+    delay(1000);
 
     // close the connection:
     client.stop();
