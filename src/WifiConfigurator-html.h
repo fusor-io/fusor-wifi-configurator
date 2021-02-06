@@ -1,6 +1,6 @@
 /*
-  Wifi Configurator -
-  web client based configuration for you IOT project
+  Wifi Configurator - part of Fusor ecosystem
+  web client based configuration for IOT project
   Copyright Giedrius Lukosevicius 2020
   MIT License
 */
