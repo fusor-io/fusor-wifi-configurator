@@ -2,7 +2,7 @@
   "name": "WifiConfigurator",
   "keywords": "wifi, iot, configuration, web access",
   "description": "Library for for configuring ESPx device using web client. Part of Fusor ecosystem",
-  "homepage": "",
+  "homepage": "http://fusor.io",
   "repository": {
     "type": "git",
     "url": "https://github.com/fusor-io/fusor-wifi-configurator"
